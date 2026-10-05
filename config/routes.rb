@@ -18,7 +18,7 @@ PocketPhone::Engine.routes.draw do
   # --- the fake Sendblue API ------------------------------------------------
   # Point your Sendblue client's base URL at wherever this engine is mounted
   # and these answer in place of https://api.sendblue.com.
-  scope module: :api, defaults: { format: :json } do
+  scope defaults: { format: :json } do
     post   "api/send-message"                  => "sendblue#send_message"
     post   "api/send-group-message"            => "sendblue#send_group_message"
     post   "api/send-carousel"                 => "sendblue#send_carousel"

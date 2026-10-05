@@ -10,6 +10,13 @@ require "minitest/autorun"
 require "webmock/minitest"
 require "pocket_phone"
 
+# A host app may teach Rails acronyms, and they apply to the engine too: with
+# "API", a file named api/foo_controller.rb must define API::FooController.
+# Declaring the usual ones here fails the suite if a file name ever uses one.
+ActiveSupport::Inflector.inflections(:en) do |inflect|
+  %w[API HTML JSON URL SMS ID UI].each { |word| inflect.acronym(word) }
+end
+
 # The smallest Rails app that can mount the engine.
 class DummyApp < Rails::Application
   config.root = Dir.mktmpdir("pocket_phone_dummy")

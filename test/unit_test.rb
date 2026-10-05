@@ -89,4 +89,12 @@ class UnitTest < PocketPhone::TestCase
     assert_equal "Reacted 🔥 to “ha”", PocketPhone::Carrier.reaction_text({ "content" => "ha" }, "🔥")
     assert_equal "Loved an attachment", PocketPhone::Carrier.reaction_text({ "content" => "" }, "love")
   end
+
+  test "every file under app defines the constant its name promises, under a host with acronyms" do
+    assert_equal "API", "api".camelize
+    %w[controllers helpers].each do |dir|
+      Rails.autoloaders.main.eager_load_dir(PocketPhone::Engine.root.join("app", dir).to_s)
+    end
+    assert_equal "pocket_phone/sendblue", PocketPhone::SendblueController.controller_path
+  end
 end

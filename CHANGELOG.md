@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Fix every API call failing with `uninitialized constant` in an app that
+  declares `inflect.acronym "API"`. The API controller is now
+  `PocketPhone::SendblueController`; no URL changes.
+
 ## 0.1.0
 
 First version.
