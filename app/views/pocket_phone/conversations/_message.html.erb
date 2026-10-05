@@ -1,0 +1,132 @@
+<%# locals: message, group, last_phone, continued %>
+<% phone = message["direction"] == "phone" %>
+<% link = pp_preview_for(message) %>
+<% receipt = phone ? pp_receipt(message, @conversation, last: last_phone) : nil %>
+<% undelivered = !phone && message["status"] == "ERROR" %>
+<% text = message["content"].to_s %>
+<% only_link = link[:card] && text.strip == link[:url] %>
+<% card = message["app_card"] %>
+<div class="pp-row <%= "mine" if phone && !group %> <%= message["service"].to_s.downcase %> <%= "undelivered" if undelivered %> <%= "continued" if continued %>"
+     data-handle="<%= message["handle"] %>" data-from="<%= phone ? message["from_number"] : "line" %>">
+  <% if group && !continued %>
+    <div class="pp-sender"><%= pp_sender_name(message) %></div>
+  <% end %>
+
+  <div class="pp-line">
+    <div class="pp-stack">
+      <% if message["media_urls"].present? %>
+        <div class="pp-carousel">
+          <% message["media_urls"].each do |url| %><%= pp_media(url) %><% end %>
+        </div>
+      <% end %>
+      <% if message["media_url"].present? %>
+        <%= pp_media(message["media_url"]) %>
+      <% end %>
+
+      <% if card %>
+        <% layout = card["layout"] || {} %>
+        <div class="pp-card pp-appcard" title="<%= card["url"] %>">
+          <% if layout["imageUrl"].present? %>
+            <div class="pp-card-image">
+              <%= image_tag layout["imageUrl"], alt: "" %>
+              <% if layout["imageTitle"].present? || layout["imageSubtitle"].present? %>
+                <div class="pp-card-overlay"><strong><%= layout["imageTitle"] %></strong><span><%= layout["imageSubtitle"] %></span></div>
+              <% end %>
+            </div>
+          <% end %>
+          <div class="pp-card-body pp-card-split">
+            <div><strong><%= layout["caption"] %></strong><span><%= layout["subcaption"] %></span></div>
+            <div class="trailing"><strong><%= layout["trailingCaption"] %></strong><span><%= layout["trailingSubcaption"] %></span></div>
+          </div>
+          <div class="pp-card-app"><%= card["appName"] %> · app card, shown as it looks without the extension installed</div>
+        </div>
+      <% end %>
+
+      <% if text.present? && !only_link %>
+        <div class="pp-bubble"><%= pp_linkify(text) %></div>
+      <% end %>
+
+      <% if link[:card] %>
+        <% preview = link[:card] %>
+        <a class="pp-card" href="<%= preview["url"] %>" target="_blank" rel="noopener">
+          <% if preview["image"].present? %>
+            <div class="pp-card-image"><%= image_tag preview["image"], alt: "" %></div>
+          <% end %>
+          <div class="pp-card-body">
+            <strong><%= preview["title"].presence || preview["host"] %></strong>
+            <span><%= preview["host"] %></span>
+          </div>
+          <% if preview["local"] %>
+            <div class="pp-card-warning">A real phone could not load this preview: <%= preview["host"] %> is only reachable from your machine.</div>
+          <% end %>
+        </a>
+      <% end %>
+
+      <% if message["reactions"].present? %>
+        <div class="pp-reactions">
+          <% message["reactions"].each do |reaction| %>
+            <span title="<%= reaction["by"] == "line" ? pp_line_name(@conversation["line"]) : pp_person_name(reaction["by"]) %>"><%= pp_tapback(reaction["reaction"]) %></span>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="pp-tools">
+      <% if !phone && !undelivered && message["service"] == "iMessage" %>
+        <span class="pp-tapbacks">
+          <% PocketPhone::ApplicationHelper::TAPBACKS.each do |name, glyph| %>
+            <button type="button" data-tapback="<%= name %>" title="<%= name.capitalize %>"><%= glyph %></button>
+          <% end %>
+        </span>
+      <% end %>
+      <button type="button" class="pp-info" data-details title="Details" aria-label="Details">ⓘ</button>
+    </div>
+  </div>
+
+  <% if receipt %>
+    <div class="pp-receipt <%= "failed" if receipt[:failed] %>">
+      <%= receipt[:text] %><% if receipt[:detail] %> <span>· <%= receipt[:detail] %></span><% end %>
+    </div>
+  <% end %>
+  <% if undelivered %>
+    <div class="pp-receipt failed">Never reached this phone <span>· <%= message["error_message"] %></span></div>
+  <% end %>
+  <% if message["send_style"].present? %>
+    <div class="pp-note">Sent with <%= message["send_style"].to_s.tr("_", " ") %></div>
+  <% end %>
+  <% if link[:reason] %>
+    <div class="pp-note">No link preview: <%= link[:reason] %>.</div>
+  <% elsif link[:preview] && link[:preview]["error"] %>
+    <div class="pp-note">No link preview: the page could not be fetched (<%= link[:preview]["error"] %>).</div>
+  <% end %>
+
+  <div class="pp-details" hidden>
+    <dl>
+      <dt>Handle</dt><dd><code><%= message["handle"] %></code></dd>
+      <dt>Status</dt><dd><%= message["status"] %><% if message["error_code"] %> (<%= message["error_code"] %>)<% end %></dd>
+      <dt>Service</dt><dd><%= message["service"] %></dd>
+      <dt>From → to</dt><dd><%= message["from_number"] %> → <%= message["to_number"].presence || @conversation["group_id"] %></dd>
+      <dt>Sent</dt><dd><%= message["created_at"] %></dd>
+      <dt>Webhooks</dt>
+      <dd>
+        <% if message["webhooks"].blank? %>
+          none sent
+        <% else %>
+          <ul>
+            <% message["webhooks"].each do |hook| %>
+              <li class="<%= "bad" unless hook["status"].to_i.between?(200, 299) %>">
+                <b><%= hook["type"] %></b> → <%= pp_webhook_outcome(hook) %> <span><%= hook["url"] %></span>
+              </li>
+            <% end %>
+          </ul>
+        <% end %>
+        <% if phone %>
+          <button type="button" class="pp-link" data-redeliver>Send the webhook again</button>
+        <% end %>
+      </dd>
+    </dl>
+    <% if message["request"].present? %>
+      <pre><%= pp_json(message["request"]) %></pre>
+    <% end %>
+  </div>
+</div>

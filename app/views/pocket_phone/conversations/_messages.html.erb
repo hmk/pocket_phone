@@ -1,0 +1,21 @@
+<% messages = @db.messages_for(@conversation) %>
+<% group = @db.group?(@conversation) %>
+<% last_phone = messages.reverse.find { |m| m["direction"] == "phone" } %>
+<% if messages.empty? %>
+  <p class="pp-stamp">No messages yet. Say something.</p>
+<% end %>
+<% previous = nil %>
+<% messages.each do |message| %>
+  <% if pp_gap?(previous, message) %>
+    <p class="pp-stamp"><%= pp_stamp(message["created_at"]) %></p>
+  <% end %>
+  <%= render "pocket_phone/conversations/message", message: message, group: group,
+        last_phone: last_phone.equal?(message),
+        continued: previous && !pp_gap?(previous, message) && previous["from_number"] == message["from_number"] %>
+  <% previous = message %>
+<% end %>
+<% if @db.typing?(@conversation) %>
+  <div class="pp-row" data-from="line">
+    <div class="pp-bubble pp-typing" aria-label="Typing"><i></i><i></i><i></i></div>
+  </div>
+<% end %>

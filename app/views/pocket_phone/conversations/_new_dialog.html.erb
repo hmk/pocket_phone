@@ -1,0 +1,52 @@
+<% people = @db.people.values %>
+<dialog class="pp-dialog" data-dialog>
+  <div class="pp-dialog-top">
+    <h2>New conversation</h2>
+    <button type="button" class="pp-icon" data-close-dialog aria-label="Close">✕</button>
+  </div>
+
+  <% if people.any? %>
+    <section>
+      <h3>Text as someone you already have</h3>
+      <div class="pp-people">
+        <% people.each do |person| %>
+          <%= form_with url: conversations_path, method: :post do %>
+            <%= hidden_field_tag :number, person["number"] %>
+            <button type="submit" class="pp-person">
+              <%= pp_avatar(pp_person_name(person["number"]), key: person["number"], size: 28) %>
+              <span><strong><%= pp_person_name(person["number"]) %></strong><small><%= PocketPhone::Numbers.pretty(person["number"]) %> · <%= person["service"] %></small></span>
+            </button>
+          <% end %>
+        <% end %>
+      </div>
+    </section>
+  <% end %>
+
+  <section>
+    <h3>A new person</h3>
+    <%= form_with url: conversations_path, method: :post, class: "pp-form" do %>
+      <label>Name <%= text_field_tag :name, nil, placeholder: "Alice", autocomplete: "off" %></label>
+      <label>Number <%= text_field_tag :number, PocketPhone::Numbers.random, required: true, autocomplete: "off" %></label>
+      <label>Phone <%= select_tag :service, options_for_select([["iPhone (iMessage)", "iMessage"], ["Android (SMS)", "SMS"], ["Android (RCS)", "RCS"]]) %></label>
+      <button type="submit" class="pp-button">Start texting</button>
+    <% end %>
+  </section>
+
+  <% if people.size >= 2 %>
+    <section>
+      <h3>A group</h3>
+      <%= form_with url: conversations_path, method: :post, class: "pp-form" do %>
+        <%= hidden_field_tag :group, 1 %>
+        <label>Group name <%= text_field_tag :group_name, nil, placeholder: "Optional", autocomplete: "off" %></label>
+        <div class="pp-checks">
+          <% people.each do |person| %>
+            <label><%= check_box_tag "participants[]", person["number"], false, id: nil %> <%= pp_person_name(person["number"]) %></label>
+          <% end %>
+        </div>
+        <button type="submit" class="pp-button">Start group</button>
+      <% end %>
+    </section>
+  <% else %>
+    <p class="pp-hint">Add two people and you can put them in a group chat.</p>
+  <% end %>
+</dialog>

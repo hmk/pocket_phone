@@ -1,0 +1,28 @@
+<% conversations = @db.sorted_conversations %>
+<% if conversations.empty? %>
+  <p class="pp-sidebar-empty">Nothing here yet.</p>
+<% end %>
+<% conversations.each do |conversation| %>
+  <% last = @db.messages_for(conversation).last %>
+  <% current = @conversation && @conversation["id"] == conversation["id"] %>
+  <% title = pp_title(conversation) %>
+  <a href="<%= conversation_path(conversation["id"]) %>" class="pp-item <%= "current" if current %>">
+    <span class="pp-unread <%= "on" if conversation["unread"].to_i.positive? && !current %>"></span>
+    <%= pp_avatar(@db.group?(conversation) ? "👥" : title, key: conversation["id"]) %>
+    <span class="pp-item-body">
+      <span class="pp-item-top">
+        <span class="pp-item-name"><%= title %></span>
+        <span class="pp-item-time"><%= pp_clock(last ? last["created_at"] : conversation["updated_at"]) %></span>
+      </span>
+      <span class="pp-item-snippet">
+        <% if @db.typing?(conversation) %>
+          <em>typing…</em>
+        <% elsif last %>
+          <%= pp_snippet(last) %>
+        <% else %>
+          <em>No messages yet</em>
+        <% end %>
+      </span>
+    </span>
+  </a>
+<% end %>

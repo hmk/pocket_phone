@@ -1,0 +1,183 @@
+<script>
+(() => {
+  const root = document.querySelector("[data-pp]");
+  if (!root) return;
+
+  const base = root.dataset.base;
+  const conversation = root.dataset.conversation;
+  const isGroup = root.dataset.group === "1";
+  const token = document.querySelector('meta[name="csrf-token"]')?.content;
+  const sidebar = document.getElementById("pp-sidebar");
+  const head = document.getElementById("pp-head");
+  const messages = document.getElementById("pp-messages");
+  const compose = document.querySelector("[data-compose]");
+  const persona = document.querySelector("[data-persona]");
+  const open = new Set();
+  let version = "";
+
+  const post = (path, body) => fetch(base + path, {
+    method: "POST",
+    body,
+    headers: { "X-CSRF-Token": token || "", "X-Requested-With": "XMLHttpRequest" },
+  });
+  const form = (fields) => {
+    const data = new FormData();
+    Object.entries(fields).forEach(([key, value]) => value != null && data.append(key, value));
+    return data;
+  };
+  const remember = (key, value) => { try { localStorage.setItem(key, value); } catch (_) {} };
+  const recall = (key) => { try { return localStorage.getItem(key); } catch (_) { return null; } };
+  const atBottom = () => messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;
+  const toBottom = () => { messages.scrollTop = messages.scrollHeight; };
+
+  // In a group, the bubbles on the right are whoever you are speaking as.
+  function decorate() {
+    if (!messages) return;
+    if (isGroup && persona) {
+      messages.querySelectorAll(".pp-row[data-from]").forEach((row) => {
+        row.classList.toggle("mine", row.dataset.from === persona.value);
+      });
+    }
+    messages.querySelectorAll(".pp-row[data-handle]").forEach((row) => {
+      const shown = open.has(row.dataset.handle);
+      row.classList.toggle("open", shown);
+      row.querySelector(".pp-details").hidden = !shown;
+    });
+    const service = head?.querySelector("[data-service]")?.dataset.service;
+    if (compose && service) {
+      compose.classList.toggle("sms", service !== "iMessage");
+      compose.querySelector("textarea").placeholder = service === "iMessage" ? "iMessage" : "Text Message";
+    }
+  }
+
+  async function poll() {
+    let response;
+    try {
+      response = await fetch(`${base}/state?conversation=${encodeURIComponent(conversation)}&version=${encodeURIComponent(version)}`,
+        { headers: { Accept: "application/json" } });
+    } catch (_) { return; }
+    if (response.status !== 200) return;
+
+    const state = await response.json();
+    version = state.version;
+    if (state.gone) { window.location = base + "/"; return; }
+    if (sidebar.innerHTML !== state.sidebar) sidebar.innerHTML = state.sidebar;
+    if (head && state.head != null && head.dataset.html !== state.head && !head.contains(document.activeElement)) {
+      head.innerHTML = state.head;
+      head.dataset.html = state.head;
+      decorate();
+    }
+    if (messages && state.messages != null && messages.dataset.html !== state.messages) {
+      const stick = atBottom();
+      messages.innerHTML = state.messages;
+      messages.dataset.html = state.messages;
+      decorate();
+      if (stick) toBottom();
+    }
+  }
+
+  // --- sending ---------------------------------------------------------------
+
+  if (compose) {
+    const text = compose.querySelector("textarea");
+    const file = compose.querySelector('input[type="file"]');
+    const attached = compose.querySelector("[data-attached]");
+    let typingAt = 0;
+
+    const grow = () => { text.style.height = "auto"; text.style.height = `${text.scrollHeight}px`; };
+    const showFile = () => {
+      attached.hidden = !file.files.length;
+      attached.textContent = file.files.length ? `📎 ${file.files[0].name} ✕` : "";
+    };
+    const typing = (on) => {
+      if (isGroup) return;
+      if (on && Date.now() - typingAt < 4000) return;
+      typingAt = on ? Date.now() : 0;
+      post(`/conversations/${conversation}/typing`, form({ is_typing: on }));
+    };
+
+    const send = async () => {
+      if (!text.value.trim() && !file.files.length) return;
+      const data = new FormData(compose);
+      text.value = ""; file.value = ""; showFile(); grow(); typingAt = 0;
+      await post(`/conversations/${conversation}/messages`, data);
+      await poll();
+      toBottom();
+      text.focus();
+    };
+
+    compose.addEventListener("submit", (event) => { event.preventDefault(); send(); });
+    text.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); send(); }
+    });
+    text.addEventListener("input", () => { grow(); typing(text.value.length > 0); });
+    file.addEventListener("change", showFile);
+    attached.addEventListener("click", () => { file.value = ""; showFile(); });
+  }
+
+  if (persona) {
+    const key = `pocket_phone:as:${conversation}`;
+    const saved = recall(key);
+    if (saved && [...persona.options].some((option) => option.value === saved)) persona.value = saved;
+    persona.addEventListener("change", () => { remember(key, persona.value); decorate(); });
+  }
+
+  // --- everything clickable --------------------------------------------------
+
+  document.addEventListener("click", async (event) => {
+    const target = event.target.closest("[data-details], [data-tapback], [data-redeliver], [data-open-dialog], [data-close-dialog]");
+    if (!target) return;
+    const row = target.closest(".pp-row");
+    const dialog = document.querySelector("[data-dialog]");
+
+    if (target.matches("[data-open-dialog]")) { dialog.showModal(); return; }
+    if (target.matches("[data-close-dialog]")) { dialog.close(); return; }
+    if (target.matches("[data-details]")) {
+      open.has(row.dataset.handle) ? open.delete(row.dataset.handle) : open.add(row.dataset.handle);
+      decorate();
+      return;
+    }
+    if (target.matches("[data-tapback]")) {
+      await post(`/messages/${row.dataset.handle}/reactions`,
+        form({ reaction: target.dataset.tapback, as: persona ? persona.value : null }));
+    } else if (target.matches("[data-redeliver]")) {
+      await post(`/messages/${row.dataset.handle}/redeliver`, form({}));
+    }
+    poll();
+  });
+
+  document.addEventListener("submit", (event) => {
+    const target = event.target;
+    if (target.dataset.confirm && !window.confirm(target.dataset.confirm)) { event.preventDefault(); return; }
+    if (!target.dataset.remote) return;
+    event.preventDefault();
+    post(new URL(target.action).pathname.slice(base.length), new FormData(target)).then(poll);
+  });
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-autosubmit]")) return;
+    event.target.form.requestSubmit();
+    event.target.blur();
+  });
+
+  // An attachment with no extension is tried as an image first; when it is
+  // not one, show it as a file instead.
+  document.addEventListener("error", (event) => {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement) || !image.dataset.fallback || !image.parentElement) return;
+    image.parentElement.className = "pp-file";
+    image.parentElement.textContent = `📎 ${image.dataset.fallback}`;
+  }, true);
+  if (messages) {
+    messages.addEventListener("load", () => { if (atBottom() || !messages.dataset.settled) toBottom(); }, true);
+    setTimeout(() => { messages.dataset.settled = "1"; }, 1500);
+    decorate();
+    toBottom();
+  }
+
+  document.querySelector("[data-dialog]")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) event.currentTarget.close();
+  });
+
+  setInterval(poll, 1000);
+})();
+</script>
