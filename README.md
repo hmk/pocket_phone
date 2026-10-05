@@ -11,6 +11,8 @@ app sends to it instead of to `api.sendblue.com`; what it sent shows up in an
 iMessage-style inbox in your browser, and what you type there reaches your app
 as a signed Sendblue webhook. No real phone, no real texts, no tunnel.
 
+![A conversation in pocket_phone: the app's messages in grey, replies typed in the browser in blue, a link preview, a tapback and a read receipt](https://raw.githubusercontent.com/hmk/pocket_phone/main/docs/screenshot.png)
+
 - Blue bubbles for iMessage, green for SMS and RCS
 - Text back as any number of fake people, one-to-one or in a group
 - Typing dots, tapbacks, read receipts, attachments
